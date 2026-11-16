@@ -179,7 +179,11 @@ async def send_meme_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 init_db()
 add_me_to_db() 
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+app = ApplicationBuilder().token(BOT_TOKEN) \
+    .read_timeout(10) \
+    .write_timeout(10) \
+    .connect_timeout(10) \
+    .build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", help))
