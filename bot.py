@@ -103,6 +103,15 @@ menu = InlineKeyboardMarkup(keyboard)
 
 #Команды
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # СОХРАНЕНИЕ ПОЛЬЗОВАТЕЛЯ В БАЗУ 
+    user_id = update.message.from_user.id
+    conn = sqlite3.connect("bot.db")
+    cursor = conn.cursor()
+    # INSERT OR IGNORE не даст добавить дубликат, если он нажмет /start дважды
+    cursor.execute("INSERT OR IGNORE INTO subscribers (user_id) VALUES (?)", (user_id,))
+    conn.commit()
+    conn.close()
+    print(f"Пользователь {user_id} добавлен в базу!")
     # Создаем клавиатуру, которая будет внизу
     reply_keyboard = [
         [KeyboardButton("Случайный мем 🎲")] # Кнопка в первом ряду
@@ -118,16 +127,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# --- ПРИНУДИТЕЛЬНАЯ ЗАПИСЬ ТВОЕГО ID ---
-YOUR_ID = 1694435325 # <--- Твой ID из @userinfobot
-
-def add_me_to_db():
-    conn = sqlite3.connect("bot.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO subscribers (user_id) VALUES (?)", (YOUR_ID,))
-    conn.commit()
-    conn.close()
-# ---------------------------------------
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("/start - подписаться на мемы")   
@@ -178,7 +177,6 @@ async def send_meme_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Запуск приложения
 
 init_db()
-add_me_to_db() 
 app = ApplicationBuilder().token(BOT_TOKEN) \
     .read_timeout(10) \
     .write_timeout(10) \
