@@ -168,38 +168,46 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.delete_message()
 
-# Глобальный словарь для хранения ID последних мемов пользователей
+# Словарь для хранения ID последних сообщений (чтобы удалять их)
 user_last_meme = {}
+user_last_request = {} # Будем хранить ID сообщения с текстом "Случайный мем"
 
 async def send_meme_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
     
-    # 1. Если у пользователя был старый мем, пытаемся его удалить
+    # 1. Удаляем сообщение пользователя (текст "Случайный мем")
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=update.message.message_id)
+    except Exception:
+        pass
+
+    # 2. Удаляем предыдущий мем, если он был
     if user_id in user_last_meme:
         try:
-            await context.bot.delete_message(chat_id=user_id, message_id=user_last_meme[user_id])
+            await context.bot.delete_message(chat_id=chat_id, message_id=user_last_meme[user_id])
         except Exception:
-            pass # Если мем уже удален вручную, просто игнорируем ошибку
+            pass
 
-    # 2. Выбираем новый мем
+    # 3. Выбираем и отправляем новый мем
     meme_folder = "memes"
     if not os.path.exists(meme_folder) or not os.listdir(meme_folder):
-        await update.message.reply_text("Ой, папка с мемами пуста.")
         return
 
     meme_list = os.listdir(meme_folder)
     random_meme = random.choice(meme_list)
     meme_path = os.path.join(meme_folder, random_meme)
 
-    # 3. Отправляем и сохраняем ID нового сообщения
     sent_message = await update.message.reply_photo(
         photo=open(meme_path, "rb"),
-        caption="Вот твой мем! (Старый удален 😉)"
+        caption="Вот твой мем!"
     )
     
-    # 4. Запоминаем ID нового мема, чтобы удалить его в следующий раз
+    # 4. Сохраняем ID нового мема
     user_last_meme[user_id] = sent_message.message_id
 
+
+    
 # Запуск приложения
 
 init_db()
