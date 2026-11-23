@@ -39,11 +39,13 @@ def init_db():
     # Таблица подписчиков
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS subscribers (
-            user_id INTEGER PRIMARY KEY
+            user_id INTEGER PRIMARY KEY,
+            last_meme_id INTEGER 
         )
     """)
     conn.commit()
     conn.close()
+
 
 # Отправка мема дня
 async def send_daily_meme(bot):
@@ -78,10 +80,19 @@ async def send_daily_meme(bot):
             meme_path = os.path.join(meme_folder, random_meme)
             
             with open(meme_path, "rb") as photo:
-                await bot.send_photo(
+                # 1. Сохраняем результат отправки в переменную sent_message
+                sent_message = await bot.send_photo(
                     chat_id=user_id,
                     photo=photo,
                     caption="Вот твой мем дня!"
+                )
+                
+                # 2. Запускаем таймер на удаление
+                scheduler.add_job(
+                    bot.delete_message,
+                    'date',
+                    run_date=datetime.datetime.now() + datetime.timedelta(hours=1),
+                    kwargs={'chat_id': user_id, 'message_id': sent_message.message_id}
                 )
         except Forbidden:
             # Если пользователь заблокировал бота — удаляем его из БД
@@ -157,22 +168,37 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await query.delete_message()
 
-# Обработка нижней кнопки "Случайный мем"
+# Глобальный словарь для хранения ID последних мемов пользователей
+user_last_meme = {}
+
 async def send_meme_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Отправляем мем (логика та же, что в handle_buttons)
+    user_id = update.effective_user.id
+    
+    # 1. Если у пользователя был старый мем, пытаемся его удалить
+    if user_id in user_last_meme:
+        try:
+            await context.bot.delete_message(chat_id=user_id, message_id=user_last_meme[user_id])
+        except Exception:
+            pass # Если мем уже удален вручную, просто игнорируем ошибку
+
+    # 2. Выбираем новый мем
     meme_folder = "memes"
     if not os.path.exists(meme_folder) or not os.listdir(meme_folder):
-        await update.message.reply_text("Ой, папка с мемами пуста или не найдена.")
+        await update.message.reply_text("Ой, папка с мемами пуста.")
         return
 
     meme_list = os.listdir(meme_folder)
     random_meme = random.choice(meme_list)
     meme_path = os.path.join(meme_folder, random_meme)
 
-    await update.message.reply_photo(
+    # 3. Отправляем и сохраняем ID нового сообщения
+    sent_message = await update.message.reply_photo(
         photo=open(meme_path, "rb"),
-        caption="Вот твой мем!"
+        caption="Вот твой мем! (Старый удален 😉)"
     )
+    
+    # 4. Запоминаем ID нового мема, чтобы удалить его в следующий раз
+    user_last_meme[user_id] = sent_message.message_id
 
 # Запуск приложения
 
@@ -191,8 +217,8 @@ app.add_handler(MessageHandler(filters.TEXT & filters.Regex("^Случайный
 
 # БЛОК ДЛЯ БУДИЛЬНИКА 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-scheduler = AsyncIOScheduler()
-
+scheduler = AsyncIOScheduler() 
+ 
 
 
 # Функция, которая запустит будильник ПОСЛЕ старта бота
@@ -209,5 +235,6 @@ async def post_init(application):
 
 # ...
 app.post_init = post_init
-app.run_polling()
+app.run_polling() 
+
 
